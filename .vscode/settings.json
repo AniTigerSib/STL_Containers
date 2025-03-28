@@ -1,8 +1,8 @@
 {
-    "files.autoSave": "onFocusChange",
-    "editor.tabSize": 2,
-    "clangd.arguments": [
-      "--background-index",
-      "--clang-tidy"
-    ]
+  "files.autoSave": "onFocusChange",
+  "editor.tabSize": 2,
+  "clangd.arguments": [
+    "--background-index",
+    "--clang-tidy"
+  ]
 }
