@@ -1,0 +1,27 @@
+# .clangd configuration file
+CompileFlags:
+  Add: [-Wall, -Werror, -Wextra, -std=c++20]
+  Remove: [-W*, -std=*]
+
+# C++ standard and style settings
+---
+Diagnostics:
+  ClangTidy:
+    Add: [google-*, modernize-*, readability-*]
+    Remove: [modernize-use-trailing-return-type]
+    CheckOptions:
+      readability-identifier-naming.NamespaceCase: lower_case
+      readability-identifier-naming.ClassCase: CamelCase
+      readability-identifier-naming.StructCase: CamelCase
+      readability-identifier-naming.FunctionCase: CamelCase
+      readability-identifier-naming.VariableCase: lower_case
+      readability-identifier-naming.ConstantCase: kCamelCase
+      readability-identifier-naming.ConstantPrefix: k
+      readability-identifier-naming.PrivateMemberSuffix: _
+      readability-identifier-naming.ProtectedMemberSuffix: _
+      readability-braces-around-statements.ShortStatementLines: 1
+      readability-function-cognitive-complexity.IgnoreMacros: true
+
+# Index settings
+Index:
+  Background: Build
