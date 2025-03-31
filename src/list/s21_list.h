@@ -6,6 +6,7 @@
 #include <iterator>
 #include <memory>
 #include <type_traits>
+#include <cstring>
 
 namespace s21 {
 template <class T, class Allocator = std::allocator<T>>
@@ -25,17 +26,29 @@ class list {
       this->prev->next = this->next;
       init();
     }
-    // void link_after(list_node_base *node) {
-    //   this->next = node->next;
-    //   this->prev = node;
-    //   node->next->prev = this;
-    //   node->next = this;
-    // }
+    void link_after(list_node_base *node) {
+      this->next = node->next;
+      this->prev = node;
+      node->next->prev = this;
+      node->next = this;
+    }
     void link_before(list_node_base *node) {
       this->prev = node->prev;
       this->next = node;
       node->prev->next = this;
       node->prev = this;
+    }
+    void link_group_before(list_node_base *first, list_node_base *last) {
+      this->prev->next = first;
+      first->prev = this->prev;
+      this->prev = last;
+      last->next = this;
+    }
+    static void unlink_group(list_node_base *first, list_node_base *last) noexcept {
+      first->prev->next = last->next;
+      last->next->prev = first->prev;
+      last->next = first;
+      first->prev = last;
     }
     static void swap(list_node_base *lhs, list_node_base *rhs) noexcept {
       std::swap(lhs->prev, rhs->prev);
@@ -53,7 +66,7 @@ class list {
   };
 
  private:
-  struct list_node : protected list_node_base {
+  struct list_node : public list_node_base {
     T data;
 
     template<typename... Args>
@@ -79,14 +92,15 @@ class list {
     using reference = T&;
     
     list_iterator() noexcept : current_(nullptr) {}
+    list_iterator(list_iterator &other) noexcept : current_(other.current_) {}
     explicit list_iterator(list_node_base *node) : current_(node) {}
 
     reference operator*() noexcept {
-      return static_cast<list_node>(current_).data;
+      return static_cast<list_node*>(current_)->data;
     }
 
     pointer operator->() noexcept {
-      return &static_cast<list_node>(current_).data;
+      return &(static_cast<list_node*>(current_)->data);
     }
 
     bool operator==(const Self &other) const noexcept = default;
@@ -180,12 +194,14 @@ class list {
   using size_type = size_t;
   using allocator_type = typename std::allocator_traits<Allocator>::template rebind_alloc<list_node>;
   
-  list() { init(); };
+  list() : list(Allocator()) {};
   explicit list(const Allocator& alloc) : allocator_(alloc) { init(); }
   explicit list(size_type count, const_reference value = value_type(), const Allocator& alloc = Allocator());
   list(std::initializer_list<value_type> const &items, const Allocator& alloc = Allocator());
   list(const list &other);
-  list(list &&other) noexcept;
+  list(const list &other, const Allocator& alloc);
+  list(list &&other);
+  list(list &&other, const Allocator& alloc);
   ~list() noexcept;
   list &operator=(list &&other);
 
@@ -206,7 +222,7 @@ class list {
   }
 
   void clear() noexcept;
-  iterator insert(iterator pos, const_reference value);
+  iterator insert(const_iterator pos, const_reference value);
   void erase(iterator pos) noexcept;
   void push_back(const_reference value);
   void pop_back() noexcept;
@@ -214,7 +230,12 @@ class list {
   void pop_front() noexcept;
   void swap(list &other);
   void merge(list &other);
+
   void splice(const_iterator pos, list &other);
+  void splice(const_iterator pos, list &other, const_iterator iter);
+  void splice(const_iterator pos, list &other,
+    const_iterator first, const_iterator last);
+
   void reverse();
   void unique();
   void sort();
@@ -243,10 +264,13 @@ class list {
 
   void init() noexcept {
     head_ = tail_ = std::allocator_traits<allocator_type>::allocate(allocator_, 1);
-    tail_->ptr()->next = tail_->ptr()->prev = head_;
+    memset(&(head_->data), 0, sizeof(value_type));
+    tail_->ptr()->next = tail_->ptr()->prev = tail_;
     size_ = 0;
   }
 };
 } // namespace s21
-  
+
+#include "s21_list.tpp"
+
 #endif // S21_LIST_H_
