@@ -1,5 +1,3 @@
-#ifndef S21_LIST_TPP_
-#define S21_LIST_TPP_
 #include "s21_list.h"
 
 namespace s21::list_details {
@@ -37,5 +35,3 @@ namespace s21::list_details {
     std::swap(lhs->next, rhs->next);
   }
 } // namespace s21::list_details
-
-#endif
