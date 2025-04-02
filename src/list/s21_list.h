@@ -8,6 +8,8 @@
 #include <type_traits>
 #include <cstring>
 
+#include <iostream>
+
 namespace s21 {
 template <class T, class Allocator = std::allocator<T>>
 class list {
@@ -128,6 +130,22 @@ class list {
       return tmp;
     }
 
+    Self operator+(int count) noexcept {
+      Self res = *this;
+      for (int i = 0; i < count; ++i) {
+        res.current_ = res.current_->next;
+      }
+      return res;
+    }
+
+    Self operator-(int count) noexcept {
+      Self res = *this;
+      for (int i = 0; i < count; ++i) {
+        current_ = current_->prev;
+      }
+      return res;
+    }
+
    private:
     list_node_base* current_;
     friend class list<T, Allocator>;
@@ -144,6 +162,7 @@ class list {
     using reference = const T&;
 
     list_const_iterator() noexcept : current_(nullptr) {}
+    list_const_iterator(list_const_iterator &other) noexcept : current_(other.current_) {}
     explicit list_const_iterator(const list_node_base *node) noexcept : current_(node) {}
 
     reference operator*() const noexcept {
@@ -196,14 +215,50 @@ class list {
   
   list() : list(Allocator()) {};
   explicit list(const Allocator& alloc) : allocator_(alloc) { init(); }
-  explicit list(size_type count, const_reference value = value_type(), const Allocator& alloc = Allocator());
-  list(std::initializer_list<value_type> const &items, const Allocator& alloc = Allocator());
-  list(const list &other);
-  list(const list &other, const Allocator& alloc);
-  list(list &&other);
-  list(list &&other, const Allocator& alloc);
-  ~list() noexcept;
-  list &operator=(list &&other);
+  explicit list(size_type count, const_reference value = value_type(),
+                const Allocator& alloc = Allocator()) : allocator_(alloc) {
+    init();
+    for (size_type i = 0; i < count; ++i) {
+      push_back(value);
+    }
+  }
+  list(std::initializer_list<value_type> const &items,
+       const Allocator& alloc = Allocator()) : allocator_(alloc) {
+    init();
+    for (const auto &value : items) {
+      push_back(value);
+    }
+  }
+  list(const list &other) {
+    this->allocator_ = other.allocator_;
+    this->init();
+    for (auto &value : other) {
+      this->push_back(value);
+    }
+  }
+  list(const list &other, const Allocator& alloc) : list(alloc) {
+    for (auto &value : other) {
+      this->push_back(value);
+    }
+  }
+  list(list &&other) {
+    this->allocator_(std::move(other.allocator_));
+    this->init();
+    this->splice(this->begin(), other);
+  }
+  list(list &&other, const Allocator& alloc) : list(alloc) {
+    this->splice(this->begin(), other);
+  }
+  ~list() noexcept {
+    clear();
+    destroy_node(head_);
+  }
+  list &operator=(list &&other) {
+    // TODO(michael): To test this
+    this->clear();
+    this->allocator_(std::move(other.allocator_));
+    this->splice(this->begin(), other);
+  }
 
   const_reference front() const noexcept { return *begin(); }
   const_reference back() const noexcept { return *end(); }
@@ -221,24 +276,138 @@ class list {
     return std::allocator_traits<allocator_type>::max_size(allocator_); 
   }
 
-  void clear() noexcept;
-  iterator insert(const_iterator pos, const_reference value);
-  void erase(iterator pos) noexcept;
-  void push_back(const_reference value);
-  void pop_back() noexcept;
-  void push_front(const_reference value);
-  void pop_front() noexcept;
-  void swap(list &other);
-  void merge(list &other);
+  void clear() noexcept {
+    while (!empty()) {
+      pop_back();
+    }
+  }
+  iterator insert(const_iterator pos, const_reference value) {
+    auto *node = create_node<T>(value);
+    node->ptr()->link_before(pos.current_);
+    ++size_;
+    iterator iter(node);
+    return iter;
+  }
+  void erase(iterator pos) noexcept {
+    if (pos == end()) {
+      return;
+    }
+    if (pos == begin()) {
+      head_ = static_cast<list_node*>(head_->ptr()->next);
+    }
+    auto *node = pos.current_;
+    node->unlink();
+    destroy_node(static_cast<list_node*>(node));
+    --size_;
+  }
+  void push_back(const_reference value) {
+    auto *node = create_node<T>(value);
+    node->ptr()->link_before(tail_);
+    if (this->empty()) {
+      head_ = node;
+    }
+    ++size_;
+  }
+  void pop_back() noexcept {
+    if (empty()) {
+      return;
+    }
+    auto *node = tail_->prev;
+    node->unlink();
+    destroy_node(static_cast<list_node*>(node));
+    --size_;
+    if (empty()) {
+      head_ = tail_;
+    }
+  }
+  void push_front(const_reference value) {
+    auto *node = create_node<T>(value);
+    node->ptr()->link_before(head_);
+    head_ = node;
+    ++size_;
+  }
+  void pop_front() noexcept {
+    if (empty()) {
+      return;
+    }
+    auto *node = head_;
+    head_ = static_cast<list_node*>(head_->ptr()->next);
+    node->unlink();
+    destroy_node(node);
+    --size_;
+  }
+  void swap(list &other) {
+    if (&other == this) {
+      return;
+    }
+    std::swap(this->head_, other.head_);
+    std::swap(this->tail_, other.tail_);
+    std::swap(this->size_, other.size_);
+  }
+  void merge(list &other) {
+    if (&other == this) {
+      return;
+    }
+    auto iter1 = this->begin();
+    auto iter2 = other.begin();
+    while (iter1 != this->end()
+        && iter2 != other.end()) {
+      if (*iter1 > *iter2) {
+        this->splice(iter1, other, iter2++);
+      } else {
+        ++iter1;
+      }
+    }
+    if (iter2 != other.end()) {
+      this->splice(this->end(), other, iter2, other.end());
+    }
+    other.clear();
+  }
 
-  void splice(const_iterator pos, list &other);
-  void splice(const_iterator pos, list &other, const_iterator iter);
+  void splice(const_iterator pos, list &other) {
+    splice(pos, other, other.begin(), other.end());
+  }
   void splice(const_iterator pos, list &other,
-    const_iterator first, const_iterator last);
+              const_iterator iter) {
+    splice(pos, other, iter, ++iter);
+  }
+  void splice(const_iterator pos, list &other,
+    const_iterator first, const_iterator last) {
+    if (first == last) {
+      return;
+    }
 
-  void reverse();
-  void unique();
-  void sort();
+    auto diff = std::distance(first, last);
+    list_node* node = pos.current_;
+
+    list_node_base::unlink_group(first.current_, last.current_->prev);
+    node->ptr()->link_group_before(first.current_, last.current_->prev);
+
+    other.size_ -= diff;
+    size_ += diff;
+  }
+
+  void reverse() {
+    iterator iter = begin();
+    for (int i = 0; i < size(); ++i) {
+      iter.current_->reverse();
+      --iter;
+    }
+    iter.current_->reverse();
+    head_ = static_cast<list_node*>(iter.current_->next);
+  }
+  void unique() {
+    for (auto iter = begin(); iter != end();) {
+      if (iter != begin() && *iter == *(--iter)) {
+        erase(iter++);
+      } else {
+        ++iter;
+      }
+    }
+  }
+  void sort() {
+    quick_sort(this->begin(), --this->end());
+  }
 
  private:
   list_node *head_, *tail_;
@@ -268,9 +437,38 @@ class list {
     tail_->ptr()->next = tail_->ptr()->prev = tail_;
     size_ = 0;
   }
+
+  static iterator patrition(iterator low, iterator high) {
+    std::cout << "partition\n";
+    iterator pivot = high;
+    iterator base = --low;
+    for (auto it = low; it != high; ++it) {
+      if (*it < *pivot) {
+        ++base;
+        if (it != base) {
+          std::swap(*it, *base);
+        }
+      }
+    }
+    ++base;
+    std::swap(*pivot, *base);
+    return base;
+  }
+
+  void quick_sort(iterator low, iterator high) {
+    std::cout << "qsort: " << *low << " " << *high << "\n";
+    if (low == high || low == high + 1 ||
+      low == this->end() || high == this->end()) {
+      return;
+    }
+    std::cout << "qsort checked";
+    auto pivot = patrition(low, high);
+    quick_sort(low, pivot - 1);
+    quick_sort(pivot + 1, high);
+  }
 };
 } // namespace s21
 
-#include "s21_list.tpp"
+// #include "s21_list.tpp"
 
 #endif // S21_LIST_H_
