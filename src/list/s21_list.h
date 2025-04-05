@@ -37,7 +37,7 @@ struct list_node_base {
 };
 } // namespace list_details
 
-template <class T, class Allocator = std::allocator<T>>
+template <typename T, typename Allocator = std::allocator<T>>
 class list {
 
   // NODES //////////////////////
@@ -227,10 +227,15 @@ class list {
     clear();
     destroy_node(head_);
   }
-  list &operator=(list &&other) {
+  constexpr list &operator=(list &&other) {
     // TODO(michael): To test this
     this->clear();
-    this->allocator_(std::move(other.allocator_));
+    if (static_cast<bool>(std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value)) {
+      auto node = this->end().current_;
+      destroy_node(node, false);
+      this->allocator_(std::move(other.allocator_));
+      init();
+    }
     this->splice(this->begin(), other);
     return *this;
   }
@@ -409,8 +414,10 @@ class list {
     return new_node;
   }
 
-  void destroy_node(list_node* node) {
-    std::allocator_traits<allocator_type>::destroy(allocator_, node);
+  void destroy_node(list_node* node, bool to_destroy_before = true) {
+    if (to_destroy_before) {
+      std::allocator_traits<allocator_type>::destroy(allocator_, node);
+    }
     std::allocator_traits<allocator_type>::deallocate(allocator_, node, 1);
   }
 
