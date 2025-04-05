@@ -59,7 +59,7 @@ class list {
  public:
   struct list_iterator {
     using Self = list_iterator;
-    using Node = list_node;
+    using Node = typename list<T, Allocator>::list_node;
 
     using difference_type = std::ptrdiff_t;
     using iterator_category = std::bidirectional_iterator_tag;
@@ -68,15 +68,15 @@ class list {
     using reference = T&;
     
     list_iterator() noexcept : current_(nullptr) {}
-    list_iterator(list_iterator &other) noexcept : current_(other.current_) {}
+    list_iterator(Self &other) noexcept : current_(other.current_) {}
     explicit list_iterator(list_details::list_node_base *node) : current_(node) {}
 
     reference operator*() noexcept {
-      return static_cast<list_node*>(current_)->data;
+      return static_cast<Node*>(current_)->data;
     }
 
     pointer operator->() noexcept {
-      return &(static_cast<list_node*>(current_)->data);
+      return &(static_cast<Node*>(current_)->data);
     }
 
     bool operator==(const Self &other) const noexcept = default;
@@ -120,61 +120,59 @@ class list {
       return res;
     }
 
-   private:
-   list_details::list_node_base* current_;
-    friend class list<T, Allocator>;
+  private:
+    list_details::list_node_base* current_;
   };
 
   struct list_const_iterator {
     using Self = list_const_iterator;
-    using Node = const list_node;
-
+    using Node = const typename list<T, Allocator>::list_node;
+  
     using difference_type = std::ptrdiff_t;
     using iterator_category = std::bidirectional_iterator_tag;
     using value_type = T;
     using pointer = const T*;
     using reference = const T&;
-
+  
     list_const_iterator() noexcept : current_(nullptr) {}
-    list_const_iterator(list_const_iterator &other) noexcept : current_(other.current_) {}
+    list_const_iterator(Self &other) noexcept : current_(other.current_) {}
     explicit list_const_iterator(const list_details::list_node_base *node) noexcept : current_(node) {}
-
+  
     reference operator*() const noexcept {
-      return static_cast<const list_node*>(current_)->data;
+      return static_cast<const Node*>(current_)->data;
     }
-
+  
     pointer operator->() const noexcept {
-      return &static_cast<const list_node*>(current_)->data;
+      return &static_cast<const Node*>(current_)->data;
     }
-
+  
     bool operator==(const Self &other) const noexcept = default;
     bool operator!=(const Self &other) const noexcept = default;
-
+  
     Self &operator++() noexcept {
       current_ = current_->next;
       return *this;
     }
-
+  
     Self operator++(int) noexcept {
       Self tmp = *this;
       current_ = current_->next;
       return tmp;
     }
-
+  
     Self &operator--() noexcept {
       current_ = current_->prev;
       return *this;
     }
-
+  
     Self operator--(int) noexcept {
       Self tmp = *this;
       current_ = current_->prev;
       return tmp;
     }
-
+  
    private:
     const list_details::list_node_base *current_;
-    friend class list<T, Allocator>;
   };
 
   // MAIN ///////////////////////
@@ -402,6 +400,7 @@ class list {
   list_node *head_, *tail_;
   size_type size_;
   allocator_type allocator_;
+  friend struct list_iterator;
 
   list_node* create_node(const_reference value) {
     list_node* new_node = std::allocator_traits<allocator_type>::allocate(allocator_, 1);
@@ -456,7 +455,5 @@ class list {
   }
 };
 } // namespace s21
-
-// #include "s21_list.tpp"
 
 #endif // S21_LIST_H_
