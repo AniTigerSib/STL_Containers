@@ -246,6 +246,26 @@ class vector : protected vector_base<T, Allocator> {
   constexpr const_iterator cend() const noexcept;
   
   [[nodiscard]] constexpr bool empty() const noexcept;
+  [[nodiscard]] constexpr size_type size() const noexcept;
+  [[nodiscard]] constexpr size_type max_size() const noexcept;
+  constexpr void reserve(size_type size);
+  [[nodiscard]] constexpr size_type capacity() const noexcept;
+  constexpr void shrink_to_fit();
+
+  constexpr void clear() noexcept;
+  constexpr iterator insert(iterator pos, const_reference value);
+  constexpr iterator insert(iterator pos, size_type count, const_reference value);
+  constexpr iterator erase(const_iterator pos);
+  constexpr iterator erase(const_iterator first, const_iterator last);
+  constexpr void push_back(const_reference value);
+  constexpr void pop_back();
+  constexpr void swap(vector& other)
+    noexcept(std::allocator_traits<allocator_type>::propagate_on_container_swap::value
+    || std::allocator_traits<allocator_type>::is_always_equal::value);
+
+ private:
+  size_type size_;
+  size_type capacity_;
 };
 } // namespace s21
 
