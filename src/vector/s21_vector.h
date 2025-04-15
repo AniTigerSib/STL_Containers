@@ -1,6 +1,8 @@
 #ifndef S21_VECTOR_H_
 #define S21_VECTOR_H_
 
+#include <algorithm>
+#include <deque>
 #include <iterator>
 #include <memory>
 
@@ -16,9 +18,9 @@ struct vector_base {
     pointer end_of_storage;
 
     vector_data() noexcept : start(), finish(), end_of_storage() {}
-    vector_data(vector_data&& data) noexcept : start(data.start),
-      finish(data.finish), end_of_storage(data.end_of_storage) {
-      data.start = data.finish = data.end_of_storage = pointer();
+    vector_data(vector_data&& other_data) noexcept : start(other_data.start),
+      finish(other_data.finish), end_of_storage(other_data.end_of_storage) {
+      other_data.start = other_data.finish = other_data.end_of_storage = pointer();
     }
     
     void copy(vector_data& data) noexcept {
@@ -35,30 +37,34 @@ struct vector_base {
     }
   };
 
- public:
-  vector_base() = default;
-  explicit vector_base(size_t size) : data() { create_storage(size); }
+  // vector_base() = default;
+  explicit vector_base(const allocator_type& alloc = allocator_type()) : allocator_(alloc), data_() {}
+  explicit vector_base(size_t size, const allocator_type& alloc = allocator_type()) : allocator_(alloc), data_() { create_storage(size); }
   vector_base(vector_base&& other) = default;
-  ~vector_base() { deallocate(data.start, data.end_of_storage - data.start); }
+  ~vector_base() { deallocate(data_.start, data_.end_of_storage - data_.start); }
 
-  vector_data data;
+ protected:
+  vector_data data_;
+  allocator_type allocator_;
 
   pointer allocate(size_t size) noexcept {
     return size != 0 ? std::allocator_traits<allocator_type>::
-      allocate(allocator_type(), size) : pointer();
+      allocate(allocator_, size) : pointer();
   }
 
   void deallocate(pointer ptr, size_t size) noexcept {
     if (ptr) {
       std::allocator_traits<allocator_type>::
-        deallocate(allocator_type(), ptr, size);
+        deallocate(allocator_, ptr, size);
     }
   }
- protected:
+
+  allocator_type get_allocator() const { return allocator_; }
+
   void create_storage(size_t size) noexcept {
-    data.start = allocate(size);
-    data.finish = data.start;
-    data.end_of_storage = data.start + size;
+    data_.start = allocate(size);
+    data_.finish = data_.start;
+    data_.end_of_storage = data_.start + size;
   }
 };
 
@@ -66,10 +72,6 @@ template <typename T, typename Allocator = std::allocator<T>>
 class vector : protected vector_base<T, Allocator> {
  private:
   using Base = vector_base<T, Allocator>;
-  using Base::data;
-  using Base::allocate;
-  using Base::deallocate;
-  using Base::create_storage;
 
  public:
   struct vector_iterator {
@@ -207,66 +209,229 @@ class vector : protected vector_base<T, Allocator> {
   using iterator = vector_iterator;
   using const_iterator = vector_const_iterator;
 
-  vector() noexcept(noexcept(Allocator())) : vector(Allocator()) {}
-  explicit constexpr vector(const Allocator& alloc) noexcept;
-  explicit vector(size_type count, const Allocator& alloc = Allocator());
-  explicit vector(size_type count, const_reference value = value_type(),
-                  const Allocator& alloc = Allocator());
-  vector(std::initializer_list<value_type> const &items, const Allocator& alloc = Allocator());
-  constexpr vector(const vector& other);
-  constexpr vector(const vector& other, const Allocator& alloc);
-  constexpr vector(vector&& other) noexcept;
-  vector(vector&& other, const Allocator& alloc);
-  constexpr ~vector();
+  vector() noexcept(noexcept(allocator_type())) : vector(allocator_type()) {}
+
+  explicit constexpr vector(const allocator_type& alloc) noexcept : Base(alloc) {}
+
+  explicit vector(size_type count, const allocator_type& alloc = allocator_type())
+    : Base(count, alloc) {
+    std::uninitialized_default_construct(this->data_.start, this->data_.end_of_storage);
+    this->data_.finish = this->data_.end_of_storage;
+  }
+
+  constexpr vector(size_type count, const_reference value,
+    const allocator_type& alloc = allocator_type()) : Base(count, alloc) {
+    std::uninitialized_fill_n(this->data_.start, count, value);
+    this->data_.finish = this->data_.end_of_storage;
+  }
+
+  vector(std::initializer_list<value_type> const &items,
+    const Allocator& alloc = Allocator()) : Base(items.size(), alloc) {
+    std::uninitialized_copy(items.begin(), items.end(), this->data_.start);
+    this->data_.finish = this->data_.end_of_storage;
+  }
+
+  constexpr vector(const vector& other) : vector(other, other.alloc) {}
+
+  constexpr vector(const vector& other, const Allocator& alloc)
+    : Base(other.size(), alloc) {
+    std::uninitialized_copy(other.data_.start, other.data_.finish, this->data_.start);
+    this->data_.finish = this->data_.end_of_storage;
+  }
+
+  constexpr vector(vector&& other) noexcept : Base(std::move(other)) {}
+
+  vector(vector&& other, const Allocator& alloc) : Base(alloc) {
+    if (std::allocator_traits<allocator_type>::is_always_equal::value ||
+      alloc == other.get_allocator()) {
+      this->data_ = std::move(other.data_);
+    } else {
+      this->create_storage(other.size());
+      std::uninitialized_move(other.data_.start, other.data_.finish, this->data_.start);
+      this->data_.finish = this.data.end_of_storage;
+    }
+  }
+
+  constexpr ~vector() {
+    std::destroy(this->data_.start, this->data_.finish);
+  }
 
   vector& operator=(vector&& other)
     noexcept(std::allocator_traits<Allocator>::propagate_on_container_move_assignment::value
-    || std::allocator_traits<Allocator>::is_always_equal::value);
+    || std::allocator_traits<Allocator>::is_always_equal::value) {
+    if (this == &other) {
+      return *this;
+    }
+    std::destroy(this->data_.start, this->data_.finish);
+    if constexpr (std::allocator_traits<Allocator>::propagate_on_container_move_assignment::value
+    || std::allocator_traits<Allocator>::is_always_equal::value) {
+      this->deallocate(this->data_.start, this->data_.end_of_storage - this->data_.start);
+      this->allocator_ = std::move(other.allocator_);
+      this->data_.copy(other.data_);
+    } else if (this->allocator_ == other.allocator_) {
+      this->deallocate(this->data_.start, this->data_.end_of_storage - this->data_.start);
+      this->data_.copy(other.data_);
+    } else {
+      this->reserve(other.size());
+      this->data_.finish = std::uninitialized_move(other.data_.start, other.data_.finish, this->data_.start);
+    }
+    other.data_.start = other.data_.finish = other.data_.end_of_storage = pointer();
+    return *this;
+  }
 
-  constexpr reference at(size_type pos);
-  constexpr const_reference at(size_type pos) const;
+  constexpr reference at(size_type pos) {
+    if (pos >= this->size()) {
+      throw std::out_of_range("vector::at: index out of range");
+    }
+    return this->data_.start[pos];
+  }
+  constexpr const_reference at(size_type pos) const {
+    if (pos >= this->size()) {
+      throw std::out_of_range("vector::at: index out of range");
+    }
+    return this->data_.start[pos];
+  }
 
-  constexpr reference operator[](size_type pos);
-  constexpr const_reference operator[](size_type pos) const;
+  constexpr reference operator[](size_type pos) {
+    return this->data_.start[pos];
+  }
+  constexpr const_reference operator[](size_type pos) const {
+    return this->data_.start[pos];
+  }
 
-  constexpr reference front();
-  constexpr const_reference front() const;
+  constexpr reference front() {
+    return *begin();
+  }
+  constexpr const_reference front() const {
+    return *cbegin();
+  }
 
-  constexpr reference back();
-  constexpr const_reference back() const;
+  constexpr reference back() {
+    return *(end() - 1);
+  }
+  constexpr const_reference back() const {
+    return *(cend() - 1);
+  }
 
-  constexpr pointer data();
-  constexpr const_pointer data() const;
+  constexpr pointer data() {
+    return this->data_.start;
+  }
+  constexpr const_pointer data() const {
+    return this->data_.start;
+  }
 
-  constexpr iterator begin();
-  constexpr iterator end();
-  constexpr const_iterator begin() const;
-  constexpr const_iterator end() const;
-  constexpr const_iterator cbegin() const noexcept;
-  constexpr const_iterator cend() const noexcept;
+  constexpr iterator begin() {
+    return iterator(this->data_.start);
+  }
+  constexpr const_iterator begin() const {
+    return const_iterator(this->data_.start);
+  }
+  constexpr const_iterator cbegin() const noexcept {
+    return const_iterator(this->data_.start);
+  }
+  constexpr iterator end() {
+    return iterator(this->data_.finish);
+  }
+  constexpr const_iterator end() const {
+    return const_iterator(this->data_.finish);
+  }
+  constexpr const_iterator cend() const noexcept {
+    return const_iterator(this->data_.finish);
+  }
   
-  [[nodiscard]] constexpr bool empty() const noexcept;
-  [[nodiscard]] constexpr size_type size() const noexcept;
-  [[nodiscard]] constexpr size_type max_size() const noexcept;
-  constexpr void reserve(size_type size);
-  [[nodiscard]] constexpr size_type capacity() const noexcept;
-  constexpr void shrink_to_fit();
+  [[nodiscard]] constexpr bool empty() const noexcept {
+    return this->data_.finish == this->data_.start;
+  }
+  [[nodiscard]] constexpr size_type size() const noexcept {
+    return static_cast<size_type>(this->data_.finish - this->data_.start);
+  }
+  [[nodiscard]] constexpr size_type max_size() const noexcept {
+    return std::numeric_limits<value_type>::max();
+  }
+  constexpr void reserve(size_type size) {
+    if (size > this->capacity()) {
+      pointer new_start = this->allocate(size);
+      pointer new_finish = new_start;
 
-  constexpr void clear() noexcept;
-  constexpr iterator insert(iterator pos, const_reference value);
-  constexpr iterator insert(iterator pos, size_type count, const_reference value);
-  constexpr iterator erase(const_iterator pos);
-  constexpr iterator erase(const_iterator first, const_iterator last);
-  constexpr void push_back(const_reference value);
-  constexpr void pop_back();
-  constexpr void swap(vector& other)
-    noexcept(std::allocator_traits<allocator_type>::propagate_on_container_swap::value
-    || std::allocator_traits<allocator_type>::is_always_equal::value);
+      try {
+        new_finish = std::uninitialized_move(this->data_.start, this->data_.finish, new_start);
+      } catch (...) {
+        this->deallocate(new_start, size);
+        throw;
+      }
 
- private:
-  size_type size_;
-  size_type capacity_;
+      std::destroy(this->data_.start, this->data_.finish);
+      this->deallocate(this->data_.start, this->data_.end_of_storage - this->data_.start);
+
+      this->data_.start = new_start;
+      this->data_.finish = new_finish;
+      this->data_.end_of_storage = this->data_.start + size;
+    }
+  }
+  [[nodiscard]] constexpr size_type capacity() const noexcept {
+    return static_cast<size_type>(this->data_.end_of_storage - this->data_.start);
+  }
+  constexpr void shrink_to_fit() {
+    if (this->size() < this->capacity()) {
+      if (this->size() == 0) {
+        this->deallocate(this->data_.start, this->data_.end_of_storage - this->data_.start);
+        this->data_.start = this->data_.finish = this->data_.end_of_storage = pointer();
+      } else {
+        size_type size = this->size();
+        pointer new_start = this->allocate(size);
+        pointer new_finish = new_start;
+
+        try {
+          new_finish = std::uninitialized_move(this->data_.start, this->data_.finish, new_start);
+        } catch (...) {
+          this->deallocate(new_start, size);
+          throw;
+        }
+
+        std::destroy(this->data_.start, this->data_.finish);
+        this->deallocate(this->data_.start, this->data_.end_of_storage - this->data_.start);
+        
+        this->data_.start = new_start;
+        this->data_.finish = new_finish;
+        this->data_.end_of_storage = this->data_.start + size;
+      }
+    }
+  }
+
+  constexpr void clear() noexcept {
+    std::destroy(this->data_.start, this->data_.finish);
+    this->data_.finish = this->data_.start;
+  }
+  constexpr iterator insert(iterator pos, const_reference value) {
+    size_type index = pos.ptr_ - this->data_.start;
+
+    if (this->size() == this->capacity()) {
+      size_type new_capacity = this->size() == 0 ? 1 : this->size() * 2;
+      this->reserve(new_capacity);
+    }
+
+    iterator actual_pos(this->data_.start + index);
+    
+    if (index < this->size()) {
+      std::construct_at(this->data_.finish, std::move(*(this->data_.finish - 1)));
+      std::move_backward(actual_pos.ptr_, this->data_.finish - 1, this->data_.finish);
+      *actual_pos = value;
+    } else {
+      std::construct_at(this->data_.finish, value);
+    }
+
+    ++this->data_.finish;
+    return actual_pos;
+  }
+  // constexpr iterator insert(iterator pos, size_type count, const_reference value);
+  // constexpr iterator erase(const_iterator pos);
+  // constexpr iterator erase(const_iterator first, const_iterator last);
+  // constexpr void push_back(const_reference value);
+  // constexpr void pop_back();
+  // constexpr void swap(vector& other)
+  //   noexcept(std::allocator_traits<allocator_type>::propagate_on_container_swap::value
+  //   || std::allocator_traits<allocator_type>::is_always_equal::value);
 };
 } // namespace s21
 
-#endif
+#endif // S21_VECTOR_H_
