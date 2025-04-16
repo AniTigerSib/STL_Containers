@@ -1,9 +1,6 @@
 #ifndef S21_VECTOR_H_
 #define S21_VECTOR_H_
 
-#include <algorithm>
-#include <deque>
-#include <iterator>
 #include <memory>
 
 namespace s21 {
