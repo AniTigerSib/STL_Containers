@@ -403,16 +403,17 @@ class vector : protected vector_base<T, Allocator> {
     this->data_.finish = this->data_.start;
   }
   constexpr iterator insert(iterator pos, const_reference value) {
+    auto size = static_cast<size_type>(this->data_.finish - this->data_.start);
     size_type index = pos.ptr_ - this->data_.start;
 
-    if (this->size() == this->capacity()) {
-      size_type new_capacity = this->size() == 0 ? 1 : this->size() * 2;
+    if (size == this->capacity()) {
+      size_type new_capacity = size == 0 ? 1 : size * 2;
       this->reserve(new_capacity);
     }
 
     iterator actual_pos(this->data_.start + index);
     
-    if (index < this->size()) {
+    if (index < size) {
       std::construct_at(this->data_.finish, std::move(*(this->data_.finish - 1)));
       std::move_backward(actual_pos.ptr_, this->data_.finish - 1, this->data_.finish);
       *actual_pos = value;
@@ -423,14 +424,56 @@ class vector : protected vector_base<T, Allocator> {
     ++this->data_.finish;
     return actual_pos;
   }
-  // constexpr iterator insert(iterator pos, size_type count, const_reference value);
-  // constexpr iterator erase(const_iterator pos);
-  // constexpr iterator erase(const_iterator first, const_iterator last);
-  // constexpr void push_back(const_reference value);
-  // constexpr void pop_back();
-  // constexpr void swap(vector& other)
-  //   noexcept(std::allocator_traits<allocator_type>::propagate_on_container_swap::value
-  //   || std::allocator_traits<allocator_type>::is_always_equal::value);
+  constexpr iterator erase(const_iterator pos) {
+    if (pos.kptr < this->data_.start || pos.kptr >= this->data_.finish) {
+      throw std::out_of_range("vector::erase: index out of range");
+    }
+
+    auto ptr = const_cast<pointer>(pos.kptr);
+    std::move(ptr + 1, this->data_.finish, ptr);
+    --this->data_.finish;
+    std::destroy_at(this->data_.finish);
+    return iterator(ptr);
+  }
+  constexpr iterator erase(const_iterator first, const_iterator last) {
+    if (first.kptr < this->data_.start || last.kptr > this->data_.finish || first.kptr > last.kptr) {
+      throw std::out_of_range("vector::erase: index out of range");
+    }
+
+    auto p_first = const_cast<pointer>(first.kptr);
+    auto p_last = const_cast<pointer>(last.kptr);
+    auto count = static_cast<size_type>(p_last - p_first);
+
+    if (count > 0) {
+      std::move(p_last, this->data_.finish, p_first);
+      pointer new_finish = this->data_.finish - count;
+      std::destroy(new_finish, this->data_.finish);
+      this->data_.finish = new_finish;
+    }
+
+    return iterator(p_first);
+  }
+  constexpr void push_back(const_reference value) {
+    if (this->size() == this->capacity()) {
+      this->reserve(this->capacity() == 0 ? 1 : this->capacity() * 2);
+    }
+
+    std::construct_at(this->data_.finish, value);
+    ++this->data_.finish;
+  }
+  constexpr void pop_back() {
+    if (this->size() > 0) {
+      --this->data_.finish;
+      std::destroy_at(this->data_.finish);
+    }
+  }
+  constexpr void swap(vector& other)
+    noexcept(std::allocator_traits<allocator_type>::propagate_on_container_swap::value
+    || std::allocator_traits<allocator_type>::is_always_equal::value) {
+    if (this != &other) {
+      this->data_.swap(other.data_);
+    }
+  }
 };
 } // namespace s21
 
