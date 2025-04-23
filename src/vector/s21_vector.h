@@ -195,7 +195,7 @@ class vector : protected vector_base<T, Allocator> {
 
   using value_type = T;
   using allocator_type = Allocator;
-  using size_type = size_t;
+  using size_type = std::size_t;
   using difference_type = ptrdiff_t;
   using reference = T&;
   using const_reference = const T&;
