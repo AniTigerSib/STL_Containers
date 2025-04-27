@@ -122,6 +122,7 @@ class list {
 
   private:
     list_details::list_node_base* current_;
+    friend class list;
   };
 
   struct list_const_iterator {
@@ -170,9 +171,14 @@ class list {
       current_ = current_->prev;
       return tmp;
     }
+
+    list_iterator non_const() const noexcept {
+      return list_iterator(const_cast<list_details::list_node_base*>(current_));
+    }
   
    private:
     const list_details::list_node_base *current_;
+    friend class list;
   };
 
   // MAIN ///////////////////////
@@ -259,13 +265,21 @@ class list {
       pop_back();
     }
   }
-  iterator insert(const_iterator pos, const_reference value) {
+  iterator insert(iterator pos, const_reference value) {
     auto *node = create_node(value);
     node->ptr()->link_before(pos.current_);
     ++size_;
     iterator iter(node);
     return iter;
   }
+
+  template<typename... Args> requires (std::same_as<value_type, Args> && ...)
+  iterator insert_many(const_iterator pos, Args&& ...args) {
+    iterator iter = pos.non_const();
+    iterator res = (insert(iter, std::forward<Args>(args)), ...);
+    return res;
+  }
+
   iterator erase(iterator pos) noexcept {
     if (pos == end()) {
       return end();

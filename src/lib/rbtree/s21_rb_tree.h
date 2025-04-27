@@ -224,29 +224,36 @@ class btree {
       delete node;
       return;
     }
-    if (node->right && node->left) {
-      node_ptr temp = node->right;
-      while (temp->left) {
-        temp = temp->left;
-      }
-      if (temp->right) {
-        temp->right->parent = temp->parent;
-      }
-      if (temp->parent == node) {
-        node->right = temp->right;
-      } else {
-        temp->parent->left = temp->right;
-      }
-    } else {
+    if (!node->right || !node->left) {
+      node_ptr child = node->left ? node->left : node->right;
       if (node == root_) {
-        root_ = node->left ? node->left : node->right;
+        root_ = child;
+        child->parent = nullptr;
       } else {
         if (k_is_left) {
-          node->parent->left = node->left ? node->left : node->right;
+          node->parent->left = child;
+          child->parent = node->parent;
         } else {
-          node->parent->right = node->left ? node->left : node->right;
+          node->parent->right = child;
+          child->parent = node->parent;
         }
       }
+    } else {
+      node_ptr tmp = node->right;
+      while (tmp->left) {
+        tmp = tmp->left;
+      }
+      if (tmp->right) {
+        tmp->right->parent = tmp->parent;
+      }
+      if (tmp->parent == node) {
+        node->right = tmp->right;
+      } else {
+        tmp->parent->left = tmp->right;
+      }
+
+      node->is_red = tmp->is_red;
+      node->key = tmp->key;
     }
   }
 
