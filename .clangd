@@ -15,8 +15,8 @@ Diagnostics:
       readability-identifier-naming.StructCase: lower_case
       readability-identifier-naming.FunctionCase: lower_case
       readability-identifier-naming.VariableCase: lower_case
-      readability-identifier-naming.ConstantCase: kCamelCase
-      readability-identifier-naming.ConstantPrefix: k
+      readability-identifier-naming.ConstantCase: lower_case
+      readability-identifier-naming.ConstantPrefix: k_
       readability-identifier-naming.PrivateMemberSuffix: _
       readability-identifier-naming.ProtectedMemberSuffix: _
       readability-braces-around-statements.ShortStatementLines: 1

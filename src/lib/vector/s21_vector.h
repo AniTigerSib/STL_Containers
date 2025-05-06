@@ -97,29 +97,37 @@ class vector : protected vector_base<T, Allocator> {
 
     Self &operator++() noexcept { ++ptr_; return *this; }
     Self operator++(int) noexcept {
-      vector_iterator tmp(*this);
+      Self tmp(*this);
       ++ptr_;
       return tmp;
     }
 
     Self &operator--() noexcept { --ptr_; return *this; }
     Self operator--(int) noexcept {
-      vector_iterator tmp(*this);
+      Self tmp(*this);
       --ptr_;
       return tmp;
     }
 
-    Self operator+(difference_type diff) noexcept { return vector_iterator(ptr_ + diff); }
+    
     difference_type operator-(const Self& rhs) const noexcept { return this->ptr_ - rhs.ptr_; }
-
+    friend Self operator+(difference_type n, const Self& iter) { return iter + n; }
+    
+    Self operator+(difference_type diff) noexcept {
+      Self tmp = *this;
+      tmp += diff;
+      return diff;
+    }
     Self &operator+=(difference_type diff) noexcept {
       ptr_ += diff;
       return *this;
     }
 
-    Self operator-(difference_type diff) noexcept { return vector_iterator(ptr_ - diff); }
-    difference_type operator-(const Self& rhs) noexcept { return rhs.ptr_ - this->ptr_; }
-
+    Self operator-(difference_type diff) noexcept {
+      Self tmp = *this;
+      tmp -= diff;
+      return diff;
+    }
     Self &operator-=(difference_type diff) noexcept {
       ptr_ -= diff;
       return *this;
@@ -158,29 +166,36 @@ class vector : protected vector_base<T, Allocator> {
 
     Self &operator++() noexcept { ++k_ptr_; return *this; }
     Self operator++(int) noexcept {
-      vector_iterator tmp(*this);
+      Self tmp(*this);
       ++k_ptr_;
       return tmp;
     }
 
     Self &operator--() noexcept { --k_ptr_; return *this; }
     Self operator--(int) noexcept {
-      vector_iterator tmp(*this);
+      Self tmp(*this);
       --k_ptr_;
       return tmp;
     }
 
-    Self operator+(difference_type diff) noexcept { return vector_iterator(k_ptr_ + diff); }
-    difference_type operator-(const Self& rhs) const noexcept { return this->k_ptr_ - rhs.k_ptr_; }
-
+    difference_type operator-(const Self& rhs) const noexcept { return this->ptr_ - rhs.ptr_; }
+    friend Self operator+(difference_type n, const Self& iter) { return iter + n; }
+    
+    Self operator+(difference_type diff) noexcept {
+      Self tmp = *this;
+      tmp += diff;
+      return diff;
+    }
     Self &operator+=(difference_type diff) noexcept {
       k_ptr_ += diff;
       return *this;
     }
 
-    Self operator-(difference_type diff) noexcept { return vector_iterator(k_ptr_ - diff); }
-    difference_type operator-(const Self& rhs) noexcept { return rhs.k_ptr_ - this->k_ptr_; }
-
+    Self operator-(difference_type diff) noexcept {
+      Self tmp = *this;
+      tmp -= diff;
+      return diff;
+    }
     Self &operator-=(difference_type diff) noexcept {
       k_ptr_ -= diff;
       return *this;
@@ -189,7 +204,7 @@ class vector : protected vector_base<T, Allocator> {
     reference operator[](difference_type diff) noexcept { return k_ptr_[diff]; }
 
    private:
-    const pointer k_ptr_;
+    pointer k_ptr_;
     friend class vector<T, Allocator>;
   };
 
@@ -245,7 +260,7 @@ class vector : protected vector_base<T, Allocator> {
     } else {
       this->create_storage(other.size());
       std::uninitialized_move(other.data_.start, other.data_.finish, this->data_.start);
-      this->data_.finish = this.data.end_of_storage;
+      this->data_.finish = this->data.end_of_storage;
     }
   }
 
@@ -343,26 +358,11 @@ class vector : protected vector_base<T, Allocator> {
     return static_cast<size_type>(this->data_.finish - this->data_.start);
   }
   [[nodiscard]] constexpr size_type max_size() const noexcept {
-    return std::numeric_limits<value_type>::max();
+    return std::allocator_traits<allocator_type>::max_size(this->allocator_);
   }
   constexpr void reserve(size_type size) {
     if (size > this->capacity()) {
-      pointer new_start = this->allocate(size);
-      pointer new_finish = new_start;
-
-      try {
-        new_finish = std::uninitialized_move(this->data_.start, this->data_.finish, new_start);
-      } catch (...) {
-        this->deallocate(new_start, size);
-        throw;
-      }
-
-      std::destroy(this->data_.start, this->data_.finish);
-      this->deallocate(this->data_.start, this->data_.end_of_storage - this->data_.start);
-
-      this->data_.start = new_start;
-      this->data_.finish = new_finish;
-      this->data_.end_of_storage = this->data_.start + size;
+      reallocate(size);
     }
   }
   [[nodiscard]] constexpr size_type capacity() const noexcept {
@@ -375,22 +375,7 @@ class vector : protected vector_base<T, Allocator> {
         this->data_.start = this->data_.finish = this->data_.end_of_storage = pointer();
       } else {
         size_type size = this->size();
-        pointer new_start = this->allocate(size);
-        pointer new_finish = new_start;
-
-        try {
-          new_finish = std::uninitialized_move(this->data_.start, this->data_.finish, new_start);
-        } catch (...) {
-          this->deallocate(new_start, size);
-          throw;
-        }
-
-        std::destroy(this->data_.start, this->data_.finish);
-        this->deallocate(this->data_.start, this->data_.end_of_storage - this->data_.start);
-        
-        this->data_.start = new_start;
-        this->data_.finish = new_finish;
-        this->data_.end_of_storage = this->data_.start + size;
+        reallocate(size);
       }
     }
   }
@@ -426,7 +411,7 @@ class vector : protected vector_base<T, Allocator> {
       throw std::out_of_range("vector::erase: index out of range");
     }
 
-    auto ptr = const_cast<pointer>(pos.k_ptr_);
+    auto ptr = pos.k_ptr_;
     std::move(ptr + 1, this->data_.finish, ptr);
     --this->data_.finish;
     std::destroy_at(this->data_.finish);
@@ -470,6 +455,26 @@ class vector : protected vector_base<T, Allocator> {
     if (this != &other) {
       this->data_.swap(other.data_);
     }
+  }
+
+ private:
+  void reallocate(size_type size) {
+    pointer new_start = this->allocate(size);
+    pointer new_finish = new_start;
+
+    try {
+      new_finish = std::uninitialized_move(this->data_.start, this->data_.finish, new_start);
+    } catch (...) {
+      this->deallocate(new_start, size);
+      throw;
+    }
+
+    std::destroy(this->data_.start, this->data_.finish);
+    this->deallocate(this->data_.start, this->data_.end_of_storage - this->data_.start);
+
+    this->data_.start = new_start;
+    this->data_.finish = new_finish;
+    this->data_.end_of_storage = this->data_.start + size;
   }
 };
 } // namespace s21
