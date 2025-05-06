@@ -13,7 +13,7 @@ BUILDDIR := ./build
 GCOVDIR := ./gcov
 LCOVDIR := ./lcov
 
-SUBDIRS := list
+SUBDIRS := . list vector
 FULLSOURCEDIRS :=
 $(foreach dir,$(SUBDIRS),$(eval FULLSOURCEDIRS += $(TESTSDIR)/$(dir)))
 

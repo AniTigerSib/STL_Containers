@@ -1,6 +1,7 @@
 #ifndef S21_VECTOR_H_
 #define S21_VECTOR_H_
 
+#include <iostream>
 #include <memory>
 
 namespace s21 {
@@ -41,10 +42,12 @@ struct vector_base {
   ~vector_base() { deallocate(data_.start, data_.end_of_storage - data_.start); }
 
  protected:
-  vector_data data_;
   allocator_type allocator_;
+  vector_data data_;
 
   pointer allocate(size_t size) noexcept {
+    // static int count = 0;
+    // std::cout << "Allocated: " << count++ << " " << size << std::endl;
     return size != 0 ? std::allocator_traits<allocator_type>::
       allocate(allocator_, size) : pointer();
   }
@@ -116,7 +119,7 @@ class vector : protected vector_base<T, Allocator> {
     Self operator+(difference_type diff) noexcept {
       Self tmp = *this;
       tmp += diff;
-      return diff;
+      return tmp;
     }
     Self &operator+=(difference_type diff) noexcept {
       ptr_ += diff;
@@ -126,7 +129,7 @@ class vector : protected vector_base<T, Allocator> {
     Self operator-(difference_type diff) noexcept {
       Self tmp = *this;
       tmp -= diff;
-      return diff;
+      return tmp;
     }
     Self &operator-=(difference_type diff) noexcept {
       ptr_ -= diff;
@@ -184,7 +187,7 @@ class vector : protected vector_base<T, Allocator> {
     Self operator+(difference_type diff) noexcept {
       Self tmp = *this;
       tmp += diff;
-      return diff;
+      return tmp;
     }
     Self &operator+=(difference_type diff) noexcept {
       k_ptr_ += diff;
@@ -227,6 +230,7 @@ class vector : protected vector_base<T, Allocator> {
 
   explicit vector(size_type count, const allocator_type& alloc = allocator_type())
     : Base(count, alloc) {
+    // std::cout << "Here" << std::endl;
     std::uninitialized_default_construct(this->data_.start, this->data_.end_of_storage);
     this->data_.finish = this->data_.end_of_storage;
   }
@@ -243,7 +247,7 @@ class vector : protected vector_base<T, Allocator> {
     this->data_.finish = this->data_.end_of_storage;
   }
 
-  constexpr vector(const vector& other) : vector(other, other.alloc) {}
+  constexpr vector(const vector& other) : vector(other, other.allocator_) {}
 
   constexpr vector(const vector& other, const Allocator& alloc)
     : Base(other.size(), alloc) {
@@ -260,7 +264,7 @@ class vector : protected vector_base<T, Allocator> {
     } else {
       this->create_storage(other.size());
       std::uninitialized_move(other.data_.start, other.data_.finish, this->data_.start);
-      this->data_.finish = this->data.end_of_storage;
+      this->data_.finish = this->data_.end_of_storage;
     }
   }
 
