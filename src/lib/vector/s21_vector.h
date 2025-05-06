@@ -87,6 +87,8 @@ class vector : protected vector_base<T, Allocator> {
     vector_iterator(Self& other) noexcept : ptr_(other.ptr_) {}
     explicit vector_iterator(pointer ptr) noexcept : ptr_(ptr) {}
 
+    Self& operator=(const Self& other) noexcept { ptr_ = other.ptr_; return *this; }
+
     reference operator*() const noexcept { return *ptr_; }
     pointer operator->() const noexcept { return ptr_; }
 
@@ -197,7 +199,7 @@ class vector : protected vector_base<T, Allocator> {
     Self operator-(difference_type diff) noexcept {
       Self tmp = *this;
       tmp -= diff;
-      return diff;
+      return tmp;
     }
     Self &operator-=(difference_type diff) noexcept {
       k_ptr_ -= diff;
@@ -231,8 +233,8 @@ class vector : protected vector_base<T, Allocator> {
   explicit vector(size_type count, const allocator_type& alloc = allocator_type())
     : Base(count, alloc) {
     // std::cout << "Here" << std::endl;
-    std::uninitialized_default_construct(this->data_.start, this->data_.end_of_storage);
-    this->data_.finish = this->data_.end_of_storage;
+    std::uninitialized_value_construct(this->data_.start, this->data_.start + count);
+    this->data_.finish = this->data_.start + count;
   }
 
   constexpr vector(size_type count, const_reference value,
@@ -415,7 +417,7 @@ class vector : protected vector_base<T, Allocator> {
       throw std::out_of_range("vector::erase: index out of range");
     }
 
-    auto ptr = pos.k_ptr_;
+    auto ptr = const_cast<pointer>(pos.k_ptr_);
     std::move(ptr + 1, this->data_.finish, ptr);
     --this->data_.finish;
     std::destroy_at(this->data_.finish);
