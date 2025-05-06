@@ -1,14 +1,8 @@
 #ifndef S21_LIST_H_
 #define S21_LIST_H_
 
-#include <cstddef>
 #include <initializer_list>
 #include <iterator>
-#include <memory>
-#include <type_traits>
-#include <cstring>
-
-#include <iostream>
 
 namespace s21 {
 namespace list_details {
@@ -20,11 +14,33 @@ struct list_node_base {
     init();
   }
 
-  void unlink();
-  void link_before(list_node_base *node);
-  void link_group_before(list_node_base *first, list_node_base *last);
-  static void unlink_group(list_node_base *first, list_node_base *last) noexcept;
-  static void swap(list_node_base *lhs, list_node_base *rhs) noexcept;
+  void unlink() {
+    next->prev = prev;
+    prev->next = next;
+    init();
+  }
+  void link_before(list_node_base *node) {
+    this->prev = node->prev;
+    this->next = node;
+    node->prev->next = this;
+    node->prev = this;
+  }
+  void link_group_before(list_node_base *first, list_node_base *last) {
+    this->prev->next = first;
+    first->prev = this->prev;
+    this->prev = last;
+    last->next = this;
+  }
+  static void unlink_group(list_node_base *first, list_node_base *last) noexcept {
+    first->prev->next = last->next;
+    last->next->prev = first->prev;
+    last->next = first;
+    first->prev = last;
+  }
+  static void swap(list_node_base *lhs, list_node_base *rhs) noexcept {
+    std::swap(lhs->prev, rhs->prev);
+    std::swap(lhs->next, rhs->next);
+  }
   void reverse() {
     std::swap(next, prev);
   }
@@ -42,7 +58,11 @@ class list {
 
   // NODES //////////////////////
 
+#ifdef TESTS
+ public:
+#else
  private:
+#endif
   struct list_node : public list_details::list_node_base {
     T data;
 
@@ -70,6 +90,15 @@ class list {
     list_iterator() noexcept : current_(nullptr) {}
     list_iterator(Self &other) noexcept : current_(other.current_) {}
     explicit list_iterator(list_details::list_node_base *node) : current_(node) {}
+
+    list_iterator& operator=(list_iterator &other) noexcept {
+      this->current_ = other.current_;
+      return *this;
+    }
+    list_iterator& operator=(list_iterator &&other) noexcept {
+      this->current_ = other.current_;
+      return *this;
+    }
 
     reference operator*() noexcept {
       return static_cast<Node*>(current_)->data;
@@ -104,23 +133,11 @@ class list {
       return tmp;
     }
 
-    Self operator+(int count) noexcept {
-      Self res = *this;
-      for (int i = 0; i < count; ++i) {
-        res.current_ = res.current_->next;
-      }
-      return res;
-    }
-
-    Self operator-(int count) noexcept {
-      Self res = *this;
-      for (int i = 0; i < count; ++i) {
-        res.current_ = res.current_->prev;
-      }
-      return res;
-    }
-
-  private:
+#ifdef TESTS
+   public:
+#else
+   private:
+#endif
     list_details::list_node_base* current_;
     friend class list;
   };
@@ -138,6 +155,11 @@ class list {
     list_const_iterator() noexcept : current_(nullptr) {}
     list_const_iterator(Self &other) noexcept : current_(other.current_) {}
     explicit list_const_iterator(const list_details::list_node_base *node) noexcept : current_(node) {}
+
+    list_const_iterator& operator=(list_const_iterator &&other) noexcept {
+      this->current_ = other.current_;
+      return *this;
+    }
   
     reference operator*() const noexcept {
       return static_cast<const Node*>(current_)->data;
@@ -147,8 +169,12 @@ class list {
       return &static_cast<const Node*>(current_)->data;
     }
   
-    bool operator==(const Self &other) const noexcept = default;
-    bool operator!=(const Self &other) const noexcept = default;
+    bool operator==(const Self &other) const noexcept {
+      return current_ == other.current_;
+    }
+    bool operator!=(const Self &other) const noexcept {
+      return current_ != other.current_;
+    }
   
     Self &operator++() noexcept {
       current_ = current_->next;
@@ -176,7 +202,11 @@ class list {
       return list_iterator(const_cast<list_details::list_node_base*>(current_));
     }
   
+#ifdef TESTS
+   public:
+#else
    private:
+#endif
     const list_details::list_node_base *current_;
     friend class list;
   };
@@ -222,25 +252,35 @@ class list {
   list(list &&other) {
     this->allocator_ = std::move(other.allocator_);
     this->init();
-    this->splice(this->begin(), other);
+    if (!other.empty()) {
+      this->splice(this->cbegin(), other);
+    }
   }
   list(list &&other, const Allocator& alloc) : list(alloc) {
-    this->splice(this->begin(), other);
+    if (!other.empty()) {
+      this->splice(this->cbegin(), other);
+    }
   }
   ~list() noexcept {
     clear();
     destroy_node(head_);
   }
+  list& operator=(const list& other) {
+    if (this != &other) {
+      list tmp(other);
+      swap(tmp);
+    }
+    return *this;
+  }
   constexpr list &operator=(list &&other) {
-    // TODO(michael): To test this
     this->clear();
     if (static_cast<bool>(std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value)) {
-      auto node = this->end().current_;
+      auto node = static_cast<list_node*>(this->end().current_);
       destroy_node(node, false);
-      this->allocator_(std::move(other.allocator_));
+      this->allocator_ = std::move(other.allocator_);
       init();
     }
-    this->splice(this->begin(), other);
+    this->splice(this->cbegin(), other);
     return *this;
   }
 
@@ -269,6 +309,9 @@ class list {
     auto *node = create_node(value);
     node->ptr()->link_before(pos.current_);
     ++size_;
+    if (pos == begin()) {
+      head_ = node;
+    }
     iterator iter(node);
     return iter;
   }
@@ -287,7 +330,8 @@ class list {
     if (pos == begin()) {
       head_ = static_cast<list_node*>(head_->ptr()->next);
     }
-    iterator to_return = pos + 1;
+    iterator to_return = pos;
+    ++to_return;
     auto *node = pos.current_;
     node->unlink();
     destroy_node(static_cast<list_node*>(node));
@@ -310,7 +354,7 @@ class list {
     node->unlink();
     destroy_node(static_cast<list_node*>(node));
     --size_;
-    if (empty()) {
+    if (size_ == 0) {
       head_ = tail_;
     }
   }
@@ -342,28 +386,30 @@ class list {
     if (&other == this) {
       return;
     }
-    auto iter1 = this->begin();
-    auto iter2 = other.begin();
-    while (iter1 != this->end()
-        && iter2 != other.end()) {
+    auto iter1 = this->cbegin();
+    auto iter2 = other.cbegin();
+    while (iter1 != this->cend()
+        && iter2 != other.cend()) {
       if (*iter1 > *iter2) {
         this->splice(iter1, other, iter2++);
       } else {
         ++iter1;
       }
     }
-    if (iter2 != other.end()) {
-      this->splice(this->end(), other, iter2, other.end());
+    if (iter2 != other.cend()) {
+      this->splice(this->cend(), other, iter2, other.cend());
     }
     other.clear();
   }
 
   void splice(const_iterator pos, list &other) {
-    splice(pos, other, other.begin(), other.end());
+    splice(pos, other, other.cbegin(), other.cend());
   }
   void splice(const_iterator pos, list &other,
               const_iterator iter) {
-    splice(pos, other, iter, ++iter);
+    auto last = iter;
+    ++last;
+    splice(pos, other, iter, last);
   }
   void splice(const_iterator pos, list &other,
     const_iterator first, const_iterator last) {
@@ -372,11 +418,22 @@ class list {
     }
 
     auto diff = std::distance(first, last);
-    list_node* node = pos.current_;
+    auto* node = static_cast<list_node*>(const_cast<list_details::list_node_base*>(pos.current_));
+    auto* last_to_insert = const_cast<list_details::list_node_base*>(last.current_->prev);
 
-    list_details::list_node_base::unlink_group(first.current_, last.current_->prev);
-    node->ptr()->link_group_before(first.current_, last.current_->prev);
+    if (other.head_ == static_cast<list_node*>(const_cast<list_details::list_node_base*>(first.current_))) {
+      other.head_ = static_cast<list_node*>(const_cast<list_details::list_node_base*>(last.current_));
+    }
+    list_details::list_node_base::unlink_group(
+      const_cast<list_details::list_node_base*>(first.current_),
+      const_cast<list_details::list_node_base*>(last.current_->prev));
+    
+    node->link_group_before(
+      const_cast<list_details::list_node_base*>(first.current_), last_to_insert);
 
+    if (node == this->head_) {
+      this->head_ = static_cast<list_node*>(const_cast<list_details::list_node_base*>(first.current_));
+    }
     other.size_ -= diff;
     size_ += diff;
   }
@@ -386,7 +443,7 @@ class list {
       return;
     }
     iterator iter = begin();
-    for (int i = 0; i < size(); ++i) {
+    for (size_type i = 0; i < size(); ++i) {
       iter.current_->reverse();
       --iter;
     }
@@ -397,7 +454,10 @@ class list {
     if (empty()) {
       return;
     }
-    for (auto current = begin(), next = ++begin(); next != end();) {
+    auto current = begin();
+    auto next = begin();
+    ++next;
+    for (; next != end();) {
       if (*current == *next) {
         next = erase(next);  // erase returns iterator to next element
       } else {
@@ -407,10 +467,30 @@ class list {
     }
   }
   void sort() {
-    quick_sort(this->begin(), --this->end());
+    if (size() <= 1) return;
+  
+    list left(allocator_);
+    list right(allocator_);
+
+    size_type half_size = size() / 2;
+    auto mid = cbegin();
+    std::advance(mid, half_size);
+
+    left.splice(left.cbegin(), *this, cbegin(), mid);
+    right.splice(right.cbegin(), *this);
+
+    left.sort();
+    right.sort();
+
+    left.merge(right);
+    *this = std::move(left);
   }
 
+#ifdef TESTS
+ public:
+#else
  private:
+#endif
   list_node *head_, *tail_;
   size_type size_;
   allocator_type allocator_;
@@ -436,36 +516,9 @@ class list {
 
   void init() noexcept {
     head_ = tail_ = std::allocator_traits<allocator_type>::allocate(allocator_, 1);
-    memset(&(head_->data), 0, sizeof(value_type));
+    // memset(&(head_->data), 0, sizeof(value_type));
     tail_->ptr()->next = tail_->ptr()->prev = tail_;
     size_ = 0;
-  }
-
-  static iterator patrition(iterator low, iterator high) {
-    const auto& pivot_value = *high;
-    iterator iter = low;
-  
-    for (iterator j = low; j != high; ++j) {
-      if (*j < pivot_value) {
-        if (iter != j) {
-          std::swap(*iter, *j);
-        }
-        ++iter;
-      }
-    }
-  
-    std::swap(*iter, *high);
-    return iter;
-  }
-
-  void quick_sort(iterator low, iterator high) {
-    if (low == high || low == high + 1 ||
-      low == this->end() || high == this->end()) {
-      return;
-    }
-    auto pivot = patrition(low, high);
-    quick_sort(low, pivot - 1);
-    quick_sort(pivot + 1, high);
   }
 };
 } // namespace s21

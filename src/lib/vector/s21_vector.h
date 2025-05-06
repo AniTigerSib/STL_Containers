@@ -141,55 +141,55 @@ class vector : protected vector_base<T, Allocator> {
     using pointer = const T*;
     using reference = const T&;
 
-    vector_const_iterator() noexcept : kptr(nullptr) {}
-    vector_const_iterator(Self& other) noexcept : kptr(other.kptr) {}
-    explicit vector_const_iterator(pointer ptr) noexcept : kptr(ptr) {}
+    vector_const_iterator() noexcept : k_ptr_(nullptr) {}
+    vector_const_iterator(Self& other) noexcept : k_ptr_(other.k_ptr_) {}
+    explicit vector_const_iterator(pointer ptr) noexcept : k_ptr_(ptr) {}
 
-    reference operator*() const noexcept { return *kptr; }
-    pointer operator->() const noexcept { return kptr; }
+    reference operator*() const noexcept { return *k_ptr_; }
+    pointer operator->() const noexcept { return k_ptr_; }
 
-    bool operator==(const Self& rhs) const noexcept { return this->kptr == rhs.kptr; }
-    bool operator!=(const Self& rhs) const noexcept { return this->kptr != rhs.kptr; }
+    bool operator==(const Self& rhs) const noexcept { return this->k_ptr_ == rhs.k_ptr_; }
+    bool operator!=(const Self& rhs) const noexcept { return this->k_ptr_ != rhs.k_ptr_; }
 
-    bool operator<(const Self& rhs) const noexcept { return this->kptr < rhs.kptr; }
-    bool operator>(const Self& rhs) const noexcept { return this->kptr > rhs.kptr; }
-    bool operator<=(const Self& rhs) const noexcept { return this->kptr <= rhs.kptr; }
-    bool operator>=(const Self& rhs) const noexcept { return this->kptr >= rhs.kptr; }
+    bool operator<(const Self& rhs) const noexcept { return this->k_ptr_ < rhs.k_ptr_; }
+    bool operator>(const Self& rhs) const noexcept { return this->k_ptr_ > rhs.k_ptr_; }
+    bool operator<=(const Self& rhs) const noexcept { return this->k_ptr_ <= rhs.k_ptr_; }
+    bool operator>=(const Self& rhs) const noexcept { return this->k_ptr_ >= rhs.k_ptr_; }
 
-    Self &operator++() noexcept { ++kptr; return *this; }
+    Self &operator++() noexcept { ++k_ptr_; return *this; }
     Self operator++(int) noexcept {
       vector_iterator tmp(*this);
-      ++kptr;
+      ++k_ptr_;
       return tmp;
     }
 
-    Self &operator--() noexcept { --kptr; return *this; }
+    Self &operator--() noexcept { --k_ptr_; return *this; }
     Self operator--(int) noexcept {
       vector_iterator tmp(*this);
-      --kptr;
+      --k_ptr_;
       return tmp;
     }
 
-    Self operator+(difference_type diff) noexcept { return vector_iterator(kptr + diff); }
-    difference_type operator-(const Self& rhs) const noexcept { return this->kptr - rhs.kptr; }
+    Self operator+(difference_type diff) noexcept { return vector_iterator(k_ptr_ + diff); }
+    difference_type operator-(const Self& rhs) const noexcept { return this->k_ptr_ - rhs.k_ptr_; }
 
     Self &operator+=(difference_type diff) noexcept {
-      kptr += diff;
+      k_ptr_ += diff;
       return *this;
     }
 
-    Self operator-(difference_type diff) noexcept { return vector_iterator(kptr - diff); }
-    difference_type operator-(const Self& rhs) noexcept { return rhs.kptr - this->kptr; }
+    Self operator-(difference_type diff) noexcept { return vector_iterator(k_ptr_ - diff); }
+    difference_type operator-(const Self& rhs) noexcept { return rhs.k_ptr_ - this->k_ptr_; }
 
     Self &operator-=(difference_type diff) noexcept {
-      kptr -= diff;
+      k_ptr_ -= diff;
       return *this;
     }
 
-    reference operator[](difference_type diff) noexcept { return kptr[diff]; }
+    reference operator[](difference_type diff) noexcept { return k_ptr_[diff]; }
 
    private:
-    const pointer kptr;
+    const pointer k_ptr_;
     friend class vector<T, Allocator>;
   };
 
@@ -422,23 +422,23 @@ class vector : protected vector_base<T, Allocator> {
     return actual_pos;
   }
   constexpr iterator erase(const_iterator pos) {
-    if (pos.kptr < this->data_.start || pos.kptr >= this->data_.finish) {
+    if (pos.k_ptr_ < this->data_.start || pos.k_ptr_ >= this->data_.finish) {
       throw std::out_of_range("vector::erase: index out of range");
     }
 
-    auto ptr = const_cast<pointer>(pos.kptr);
+    auto ptr = const_cast<pointer>(pos.k_ptr_);
     std::move(ptr + 1, this->data_.finish, ptr);
     --this->data_.finish;
     std::destroy_at(this->data_.finish);
     return iterator(ptr);
   }
   constexpr iterator erase(const_iterator first, const_iterator last) {
-    if (first.kptr < this->data_.start || last.kptr > this->data_.finish || first.kptr > last.kptr) {
+    if (first.k_ptr_ < this->data_.start || last.k_ptr_ > this->data_.finish || first.k_ptr_ > last.k_ptr_) {
       throw std::out_of_range("vector::erase: index out of range");
     }
 
-    auto p_first = const_cast<pointer>(first.kptr);
-    auto p_last = const_cast<pointer>(last.kptr);
+    auto p_first = const_cast<pointer>(first.k_ptr_);
+    auto p_last = const_cast<pointer>(last.k_ptr_);
     auto count = static_cast<size_type>(p_last - p_first);
 
     if (count > 0) {
