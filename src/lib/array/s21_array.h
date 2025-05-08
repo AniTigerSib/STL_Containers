@@ -2,7 +2,6 @@
 #define S21_ARRAY_H_
 
 #include <algorithm>
-#include <cstddef>
 #include <stdexcept>
 
 namespace s21 {
@@ -46,6 +45,19 @@ struct array {
   using const_iterator = const T*;
 
   using arr_inner = array_inner<T, N>;
+
+  constexpr array() = default;
+  constexpr array(const array&) = default;
+  constexpr array(array&&) = default;
+  constexpr array(std::initializer_list<value_type> const &items) : elements_() {
+    if (items.size() > size()) {
+      throw std::out_of_range("array::array: initializer list size is greater than array size");
+    }
+    std::copy(items.begin(), items.end(), elements_);
+  }
+  ~array() noexcept = default;
+  constexpr array& operator=(const array&) = default;
+  constexpr array& operator=(const array&&) = default;
 
   constexpr reference at(size_type pos) {
     if (pos >= size()) {
@@ -100,7 +112,7 @@ struct array {
   }
 
   constexpr void swap(array& other)
-  noexcept(noexcept(swap(std::declval<T&>(), std::declval<T&>()))) {
+  noexcept(std::is_nothrow_swappable_v<T>) {
     std::swap_ranges(this->begin(), this->end(), other.begin());
   }
 
