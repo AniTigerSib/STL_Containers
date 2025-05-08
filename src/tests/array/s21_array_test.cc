@@ -93,15 +93,15 @@ TEST(ArrayTest, Iterators) {
   
   // Проверка begin() и end()
   int sum = 0;
-  for (auto it = arr.begin(); it != arr.end(); ++it) {
-    sum += *it;
+  for (int & iter : arr) {
+    sum += iter;
   }
   EXPECT_EQ(sum, 15);
   
   // Проверка cbegin() и cend()
   sum = 0;
-  for (auto it = arr.cbegin(); it != arr.cend(); ++it) {
-    sum += *it;
+  for (int iterer : arr) {
+    sum += iterer;
   }
   EXPECT_EQ(sum, 15);
   
@@ -115,8 +115,8 @@ TEST(ArrayTest, Iterators) {
   // Проверка const итераторов
   const s21::array<int, 5> const_arr = {1, 2, 3, 4, 5};
   sum = 0;
-  for (auto it = const_arr.begin(); it != const_arr.end(); ++it) {
-    sum += *it;
+  for (int iter : const_arr) {
+    sum += iter;
   }
   EXPECT_EQ(sum, 15);
 }
