@@ -57,7 +57,10 @@ struct array {
   }
   ~array() noexcept = default;
   constexpr array& operator=(const array&) = default;
-  constexpr array& operator=(const array&&) = default;
+  constexpr array& operator=(const array&& other) noexcept(std::is_nothrow_move_constructible_v<T>) {
+    std::move(other.begin(), other.end(), begin());
+    return *this;
+  }
 
   constexpr reference at(size_type pos) {
     if (pos >= size()) {
